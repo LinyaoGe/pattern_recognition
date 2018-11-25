@@ -1,0 +1,86 @@
+import torch
+import torch.nn as net
+import torchvision
+from PIL import Image
+
+# 训练数据和测试数据导入
+traing_data = torchvision.datasets.ImageFolder(root="./train_faces", transform=torchvision.transforms.ToTensor, target_transform=torchvision.transforms.ToTensor)
+test_data = torchvision.datasets.ImageFolder(root="./test_faces", transform=torchvision.transforms.ToTensor)
+
+# 图像格式转换
+loader = torchvision.transforms.Compose([
+    torchvision.transforms.ToTensor()
+])
+def image_loader(image_name):
+    image =Image.open(image_name)
+    image = loader(image).unsqueeze(1)
+    return image
+
+# 定义CNN模型
+class CNN(net.Module):
+    def __init__(self):
+        super(CNN, self).__init__()
+        self.conv1 = net.Sequential(
+            net.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=1, padding=2),
+            net.ReLU(),
+            net.MaxPool2d(kernel_size=2)
+        )
+        self.conv2 = net.Sequential(
+            net.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=1, padding=2),
+            net.ReLU(),
+            net.MaxPool2d(kernel_size=2)
+        )
+
+        self.out = net.Linear(in_features=32*28*23, out_features=40)
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = x.view(x.size(0), -1)
+        output = self.out(x)
+        return output
+
+
+if __name__ == '__main__':
+    cnn = CNN()
+    # 设置网络的学习率，偏置和权重
+    optimizer = torch.optim.Adam(cnn.parameters(), lr=0.001)
+    loss_function = net.CrossEntropyLoss()
+    EPOCH = 20
+
+    Len = traing_data.imgs.__len__()
+    test_len = test_data.imgs.__len__()
+    for epoch in range(EPOCH):
+        for step in range(Len):
+            image = traing_data.imgs[step][0]
+            label = traing_data.imgs[step][1]
+            label = [label]
+            image = image_loader(image)
+            output = cnn(image)
+            label = torch.LongTensor(label)
+            loss = loss_function(output, label)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        count = 0
+        for i in range(test_len):
+            test_image = test_data.imgs[i][0]
+            test_label = test_data.imgs[i][1]
+            test_label = [test_label]
+            test_label = torch.LongTensor(test_label)
+            image = image_loader(test_image)
+            test_output = cnn(image)
+            pred_label = torch.max(test_output, 1)[1].data.squeeze()
+            if pred_label == test_label:
+                count = count + 1
+        accuracy = 100*count / test_len
+        print('Epoch:', epoch, '|test accuracy:%3.3f%%' % accuracy)
+
+
+
+
+
+
+
+
+
